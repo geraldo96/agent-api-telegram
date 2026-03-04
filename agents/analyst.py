@@ -1,15 +1,13 @@
 """
 Analyst Agent — usa Claude + tool per analizzare i dati e generare grafici
+Compatibile con LangChain 1.x (usa bind_tools invece di AgentExecutor)
 """
 
-import json
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 
 from langchain_anthropic import ChatAnthropic
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from graph.state import AgentState
 from tools.file_tools import save_report
@@ -31,9 +29,21 @@ Linee guida:
 - Sii preciso con i numeri, cita sempre i valori specifici"""
 
 
+# Mappa nome tool → funzione
+TOOLS_MAP = {
+    "plot_line_chart": plot_line_chart,
+    "plot_bar_chart": plot_bar_chart,
+    "plot_histogram": plot_histogram,
+    "save_report": save_report,
+}
+
+TOOLS_LIST = list(TOOLS_MAP.values())
+
+
 def analyst_agent(state: AgentState) -> AgentState:
     """
     Nodo LangGraph: analizza i dati con Claude e genera report + grafici.
+    Usa il loop ReAct manuale con bind_tools (compatibile LangChain 1.x)
     """
     print("🔬 [Analyst] Avvio analisi...")
 
@@ -59,8 +69,8 @@ Task richiesto: {task}
 === RIASSUNTO DATASET ===
 {data_summary}
 
-=== DATI (JSON, prime 100 righe) ===
-{data_json[:8000]}  
+=== DATI (JSON) ===
+{data_json[:8000]}
 
 === ISTRUZIONI ===
 1. Analizza i dati sopra
@@ -69,39 +79,67 @@ Task richiesto: {task}
 4. Nel report includi i path dei grafici generati
 """
 
-    # Setup LLM e tools
+    # Setup LLM con tool binding
     llm = ChatAnthropic(
         model=settings.CLAUDE_MODEL,
         anthropic_api_key=settings.ANTHROPIC_API_KEY,
         max_tokens=settings.MAX_TOKENS,
         temperature=settings.TEMPERATURE,
     )
+    llm_with_tools = llm.bind_tools(TOOLS_LIST)
 
-    tools = [plot_line_chart, plot_bar_chart, plot_histogram, save_report]
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", ANALYST_SYSTEM_PROMPT),
-        ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-    ])
-
-    agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
-    executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        max_iterations=settings.AGENT_MAX_ITERATIONS,
-        verbose=True,
-        handle_parsing_errors=True,
-    )
+    # Messaggi conversazione
+    messages = [
+        SystemMessage(content=ANALYST_SYSTEM_PROMPT),
+        HumanMessage(content=user_message),
+    ]
 
     try:
-        result = executor.invoke({"input": user_message})
-        analysis_text = result.get("output", "")
+        # === Loop ReAct manuale ===
+        for iteration in range(settings.AGENT_MAX_ITERATIONS):
+            print(f"   🔄 Iterazione {iteration + 1}...")
 
-        # Raccogli i grafici generati (cerca nella output folder)
+            response = llm_with_tools.invoke(messages)
+            messages.append(response)
+
+            # Se Claude non chiama tool → ha finito
+            if not response.tool_calls:
+                print("   ✅ Claude ha completato l'analisi")
+                break
+
+            # Esegui i tool chiamati da Claude
+            for tool_call in response.tool_calls:
+                tool_name = tool_call["name"]
+                tool_args = tool_call["args"]
+                tool_id = tool_call["id"]
+
+                print(f"   🔧 Tool: {tool_name}({list(tool_args.keys())})")
+
+                if tool_name in TOOLS_MAP:
+                    tool_result = TOOLS_MAP[tool_name].invoke(tool_args)
+                else:
+                    tool_result = f"Tool '{tool_name}' non trovato"
+
+                print(f"   📤 Risultato: {str(tool_result)[:100]}")
+
+                # Aggiungi risultato tool ai messaggi
+                messages.append(ToolMessage(
+                    content=str(tool_result),
+                    tool_call_id=tool_id,
+                ))
+
+        # Estrai testo finale dalla risposta
+        analysis_text = response.content
+        if isinstance(analysis_text, list):
+            analysis_text = " ".join(
+                block.get("text", "") for block in analysis_text
+                if isinstance(block, dict)
+            )
+
+        # Raccogli grafici generati negli ultimi 5 minuti
         charts = [
             str(p) for p in settings.DATA_OUTPUT_PATH.glob("*.png")
-            if p.stat().st_mtime > (datetime.now().timestamp() - 300)  # ultimi 5 min
+            if p.stat().st_mtime > (datetime.now().timestamp() - 300)
         ]
 
         print(f"   ✅ Analisi completata — {len(charts)} grafici generati")
