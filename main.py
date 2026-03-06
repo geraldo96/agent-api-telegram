@@ -19,7 +19,8 @@ console = Console()
 def print_banner():
     console.print(Panel.fit(
         "[bold cyan]🤖 Data Analytics Multi-Agent[/bold cyan]\n"
-        "[dim]LangGraph + Claude + FAISS + Telegram[/dim]",
+        "[dim]LangGraph + Claude + FAISS + Telegram[/dim]\n"
+        f"[dim]Model: [/dim][yellow]{settings.CLAUDE_MODEL}[/yellow]",
         border_style="cyan"
     ))
 

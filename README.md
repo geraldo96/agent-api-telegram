@@ -40,8 +40,34 @@ Input (file/api)
   → [Notifier]  invia → Telegram (testo + immagini)
 ```
 
-### Prossimi step (roadmap)
-- [ ] FastAPI wrapper per esporre come REST API
-- [ ] Scheduler (cron) per analisi automatiche
-- [ ] Streamlit dashboard
-- [ ] Supporto database SQL
+### Roadmap
+
+#### Fase 1 — Fondamenta ✅
+- [x] LangGraph multi-agent pipeline
+- [x] Claude (Anthropic) come LLM
+- [x] Supporto CSV / Excel / API esterne
+- [x] Notifiche Telegram (testo + grafici)
+- [x] CLI con modalità interattiva
+- [x] Aggiunto il tool per gestione di lista movimenti
+
+#### Fase 2 — Evoluzione architetturale
+- [ ] **MCP (Model Context Protocol)** — i tool diventano MCP Server
+      standard richiamabili da qualsiasi LLM compatibile
+- [ ] **A2A (Agent to Agent Protocol)** — ogni agente diventa
+      un microservizio indipendente comunicante via protocollo standard
+
+#### Fase 3 — Consolidamento
+- [ ] Supporto database SQL (SQLite / PostgreSQL)
+- [ ] Scheduler (cron) per analisi automatiche periodiche
+
+#### Fase 4 — Livelli superiori
+- [ ] FastAPI wrapper per esporre la pipeline come REST API
+- [ ] Streamlit dashboard che chiama la FastAPI
+- [ ] Documentazione API con Swagger UI
+
+### Protocolli — riferimenti
+
+| Protocollo | Autore | Scopo |
+|---|---|---|
+| [MCP](https://modelcontextprotocol.io) | Anthropic | Collega LLM ↔ Tool in modo standard |
+| [A2A](https://google.github.io/A2A) | Google | Collega Agente ↔ Agente in modo standard |

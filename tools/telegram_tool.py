@@ -51,7 +51,7 @@ def send_telegram_photo(image_path: str, caption: str = "") -> str:
                 data={
                     "chat_id": settings.TELEGRAM_CHAT_ID,
                     "caption": caption[:1024],  # limite Telegram
-                    "parse_mode": "Markdown",
+                    #"parse_mode": "Markdown",
                 },
                 files={"photo": img},
                 timeout=30,
